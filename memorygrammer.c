@@ -5,9 +5,11 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#define DEFAULT_CAPACITY 100
 
 // Fisher-Yates shuffle to randomize node access order
 static void shuffle(probe_node_t** array, size_t n) {
+    //***************** NEED TO BE FIXED (SIZE AND STUFF) MAY BE NEED TO ADD NULLIFING THE ARRAY*****************
     if (n <= 1) return;
     for (size_t i = n - 1; i > 0; i--) {
         size_t j = rand() % (i + 1);
@@ -17,9 +19,10 @@ static void shuffle(probe_node_t** array, size_t n) {
     }
 }
 
-int allocate_timing_arr(memorygrammer_t* mg, size_t num_samples) {
+int allocate_timing_arr(memorygrammer_t* mg) {
     if (!mg) return 0;
-    mg->timings = calloc(num_samples, sizeof(double));
+    mg->num_samples = 0;
+    mg->timings = calloc(DEFAULT_CAPACITY, sizeof(double));
     if (!mg->timings) {
         perror("Failed to allocate timings array");
         return 0;
@@ -59,30 +62,8 @@ int allocate_probe_nodes(cpu_config_t* config, memorygrammer_t* mg, size_t num_n
     return 1;
 }
 
-
-
-int init_memorygrammer(memorygrammer_t* mg, cpu_config_t* config, size_t num_samples) {
-    if (!mg || !config) return 0;
-
-    memset(mg, 0, sizeof(memorygrammer_t));
-    mg->config = config;
-    mg->num_samples = num_samples;
-
-    // Calculate number of cache lines (nodes) needed to cover LLC
-    size_t num_nodes = config->llc_size_bytes / config->cache_line_size;
-    mg->num_nodes = num_nodes;
-
-    if (!allocate_timing_arr(mg, num_samples)) {
-        return 0;
-    }
-
-    if (!allocate_nodes_arr(mg, num_nodes)) {
-        return 0;
-    }
-
-    if (!allocate_probe_nodes(config, mg, num_nodes)) {
-        return 0;
-    }
+int suffle_linked_list(memorygrammer_t* mg, size_t num_nodes) {
+    if (!mg || !mg->nodes_arr) return 0;
 
     // Shuffle node order to randomize traversal
     srand(time(NULL));
@@ -94,14 +75,48 @@ int init_memorygrammer(memorygrammer_t* mg, cpu_config_t* config, size_t num_sam
     }
     mg->nodes_arr[num_nodes - 1]->next = mg->nodes_arr[0]; // make it circular
     mg->head = mg->nodes_arr[0]; // set head to the first node
+    return 1;
+
+}
+
+
+
+int init_memorygrammer(memorygrammer_t* mg, cpu_config_t* config) {
+    if (!mg || !config) return 0;
+
+    memset(mg, 0, sizeof(memorygrammer_t));
+    mg->config = config;
+
+    // Calculate number of cache lines (nodes) needed to cover LLC
+    size_t num_nodes = config->llc_size_bytes / config->cache_line_size;
+    mg->num_nodes = num_nodes;
+
+    if (!allocate_timing_arr(mg)) {
+        return 0;
+    }
+
+    if (!allocate_nodes_arr(mg, num_nodes)) {
+        return 0;
+    }
+
+    if (!allocate_probe_nodes(config, mg, num_nodes)) {
+        return 0;
+    }
+
+    if (!suffle_linked_list(mg, num_nodes)) {
+        return 0;
+    }
+
 
     return 1;
 }
 
 
-void run_probe(memorygrammer_t* mg, uint64_t interval_cycles) {
+void run_probe(memorygrammer_t* mg, uint64_t interval_cycles, uint64_t probe_cycles) {
     if (!mg || !mg->head || !mg->timings) return;
-    for (int i = 0; i < mg->num_samples; i++) {
+    uint64_t probeLimitTime = rdtscp64() + probe_cycles;
+    size_t capacity = DEFAULT_CAPACITY;
+    while (rdtscp64() < probeLimitTime) {
         uint64_t t_start = rdtscp64();
         uint64_t t_target = t_start + interval_cycles;
 
@@ -113,12 +128,26 @@ void run_probe(memorygrammer_t* mg, uint64_t interval_cycles) {
         }
         uint64_t traverse_end = rdtscp64();
 
+        if (mg->num_samples >= capacity) {
+            size_t new_capacity = capacity * 2;
+            double* new_ptr = realloc(mg->timings, new_capacity * sizeof(double));
+            if (!new_ptr) {
+                fprintf(stderr, "Failed to realloc timings array\n");
+                free(mg->timings); // optional, since we're exiting
+                exit(EXIT_FAILURE);
+            }
+            mg->timings = new_ptr;
+            capacity = new_capacity;
+        }
+
         // Store number of cycles it took
-        mg->timings[i] = (double)(traverse_end - traverse_start);
+        mg->timings[mg->num_samples] = (double)(traverse_end - traverse_start);
+        mg->num_samples++;
 
         // Busy-wait until next cycle window
         while (rdtscp64() < t_target);
     }
+
 }
 
 int write_timings_to_csv(memorygrammer_t* mg, const char* path) {
