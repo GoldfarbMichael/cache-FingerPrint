@@ -29,11 +29,11 @@ typedef struct {
 int init_memorygrammer(memorygrammer_t* mg, cpu_config_t* config, size_t num_samples);
 
 /**
- *Run the probe
+ * Records the time to probe every round into mg->timings[]
  *Traverses the linked list at fixed intervals, logs timing
- *interval_ns: sampling interval in nanoseconds
+ *interval_cycles: sampling interval in cycles
  */
-void run_probe(memorygrammer_t* mg, uint64_t interval_cycles, int traversal_normalizer);
+void run_probe(memorygrammer_t* mg, uint64_t interval_cycles);
 
 /**
  Write timings to a CSV file

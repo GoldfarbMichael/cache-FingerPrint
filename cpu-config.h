@@ -23,6 +23,7 @@ void print_cpu_config(const cpu_config_t* config);
 int get_num_of_slices(const cpu_config_t* config);
 size_t get_sets_per_slice(const cpu_config_t* config);
 int get_associativity(const cpu_config_t* config);
+uint32_t get_clock_speed_hz(const cpu_config_t* config);
 
 
 #endif

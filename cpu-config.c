@@ -185,3 +185,8 @@ int get_associativity(const cpu_config_t* config) {
     if (!config) return 0;
     return config->llc_associativity;
 }
+
+uint32_t get_clock_speed_hz(const cpu_config_t* config) {
+    if (!config) return 0;
+    return config->clock_speed_hz;
+}

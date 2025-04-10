@@ -99,10 +99,9 @@ int init_memorygrammer(memorygrammer_t* mg, cpu_config_t* config, size_t num_sam
 }
 
 
-void run_probe(memorygrammer_t* mg, uint64_t interval_cycles, int traversal_normalizer) {
+void run_probe(memorygrammer_t* mg, uint64_t interval_cycles) {
     if (!mg || !mg->head || !mg->timings) return;
-
-    for (size_t i = 0; i < mg->num_samples; ++i) {
+    for (int i = 0; i < mg->num_samples; i++) {
         uint64_t t_start = rdtscp64();
         uint64_t t_target = t_start + interval_cycles;
 
@@ -115,7 +114,7 @@ void run_probe(memorygrammer_t* mg, uint64_t interval_cycles, int traversal_norm
         uint64_t traverse_end = rdtscp64();
 
         // Store number of cycles it took
-        mg->timings[i] = (double)(traverse_end - traverse_start)/traversal_normalizer;
+        mg->timings[i] = (double)(traverse_end - traverse_start);
 
         // Busy-wait until next cycle window
         while (rdtscp64() < t_target);
@@ -125,17 +124,16 @@ void run_probe(memorygrammer_t* mg, uint64_t interval_cycles, int traversal_norm
 int write_timings_to_csv(memorygrammer_t* mg, const char* path) {
     if (!mg || !mg->timings || !path) return 0;
 
-    FILE* f = fopen(path, "w");
+    FILE* f = fopen(path, "a");
     if (!f) {
         perror("Failed to open CSV file");
         return 0;
     }
 
-    // write header
-    fprintf(f, "sample_index,cycles\n");
+
 
     for (size_t i = 0; i < mg->num_samples; ++i) {
-        fprintf(f, "%zu,%.0f\n", i, mg->timings[i]);
+        fprintf(f, "%.0f\n", mg->timings[i]);
     }
 
     fclose(f);
