@@ -17,7 +17,7 @@ typedef struct {
     probe_node_t** nodes_arr;       // Array of all probe nodes
     size_t num_nodes;           // Number of nodes (cache lines)
     probe_node_t* head;         // Starting point for traversal (randomized)
-    double* timings;            // Result timings in microseconds (or ns)
+    double* timings;            // Result timings in cycles
     size_t num_samples;         // Number of samples that exist in the timings array
 } memorygrammer_t;
 
@@ -47,4 +47,5 @@ void free_memorygrammer(memorygrammer_t* mg);
 
 int shuffle_linked_list(memorygrammer_t* mg, size_t num_nodes);
 
+void dummy_probe(memorygrammer_t* mg, uint64_t interval_cycles, uint64_t probe_cycles);
 #endif //MEMORYGRAMMER_H

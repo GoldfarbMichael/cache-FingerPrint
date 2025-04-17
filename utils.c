@@ -25,3 +25,16 @@ void parse_site_name(const char* url, char* site_name, size_t size) {
     strncpy(site_name, www_ptr, length);
     site_name[length] = '\0'; // Null-terminate the string
 }
+
+
+
+void empty_csv(const char* site_name) {
+    char csv_path[256];
+    snprintf(csv_path, sizeof(csv_path), "%s.csv", site_name);
+    FILE* file = fopen(csv_path, "w");
+    if (!file) {
+        perror("Failed to open file");
+        return;
+    }
+    fclose(file);
+}

@@ -9,5 +9,6 @@ static inline uint64_t rdtscp64() {
     return (((uint64_t)high) << 32) | low;
 }
 void parse_site_name(const char* url, char* site_name, size_t size);
+void empty_csv(const char* site_name);
 
 #endif //UTILS_H

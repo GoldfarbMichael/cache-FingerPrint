@@ -5,7 +5,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#define DEFAULT_CAPACITY 100
+#define DEFAULT_CAPACITY 1024
 
 // Fisher-Yates shuffle to randomize node access order
 static void shuffle(probe_node_t** array, size_t n) {
@@ -62,7 +62,7 @@ int allocate_probe_nodes(cpu_config_t* config, memorygrammer_t* mg, size_t num_n
     return 1;
 }
 
-int suffle_linked_list(memorygrammer_t* mg, size_t num_nodes) {
+int shuffle_linked_list(memorygrammer_t* mg, size_t num_nodes) {
     if (!mg || !mg->nodes_arr) return 0;
 
     // Shuffle node order to randomize traversal
@@ -103,7 +103,7 @@ int init_memorygrammer(memorygrammer_t* mg, cpu_config_t* config) {
         return 0;
     }
 
-    if (!suffle_linked_list(mg, num_nodes)) {
+    if (!shuffle_linked_list(mg, num_nodes)) {
         return 0;
     }
 
@@ -111,11 +111,33 @@ int init_memorygrammer(memorygrammer_t* mg, cpu_config_t* config) {
     return 1;
 }
 
+void reset_timings(memorygrammer_t* mg) {
+    if (!mg) return;
+
+    // Free the existing timings array
+    if (mg->timings) {
+        free(mg->timings);
+        mg->timings = NULL;
+    }
+
+    // Allocate a new timings array
+    mg->timings = calloc(DEFAULT_CAPACITY, sizeof(double));
+    if (!mg->timings) {
+        perror("Failed to allocate timings array");
+        return;
+    }
+
+    // Reset the number of samples
+    mg->num_samples = 0;
+}
+
 
 void run_probe(memorygrammer_t* mg, uint64_t interval_cycles, uint64_t probe_cycles) {
     if (!mg || !mg->head || !mg->timings) return;
     uint64_t probeLimitTime = rdtscp64() + probe_cycles;
     size_t capacity = DEFAULT_CAPACITY;
+    reset_timings(mg);
+
     while (rdtscp64() < probeLimitTime) {
         uint64_t t_start = rdtscp64();
         uint64_t t_target = t_start + interval_cycles;
@@ -129,6 +151,7 @@ void run_probe(memorygrammer_t* mg, uint64_t interval_cycles, uint64_t probe_cyc
         uint64_t traverse_end = rdtscp64();
 
         if (mg->num_samples >= capacity) {
+            printf("ALLOCATING MORE CAPACITY\n");
             size_t new_capacity = capacity * 2;
             double* new_ptr = realloc(mg->timings, new_capacity * sizeof(double));
             if (!new_ptr) {
@@ -147,7 +170,26 @@ void run_probe(memorygrammer_t* mg, uint64_t interval_cycles, uint64_t probe_cyc
         // Busy-wait until next cycle window
         while (rdtscp64() < t_target);
     }
+    shuffle_linked_list(mg, mg->num_nodes);
 
+}
+void dummy_probe(memorygrammer_t* mg, uint64_t interval_cycles, uint64_t probe_cycles) {
+    if (!mg || !mg->head) return;
+    uint64_t probeLimitTime = rdtscp64() + probe_cycles;
+    while (rdtscp64() < probeLimitTime) {
+        shuffle_linked_list(mg, mg->num_nodes); // Randomize access order
+
+        uint64_t t_start = rdtscp64();
+        uint64_t t_target = t_start + interval_cycles;
+
+        volatile probe_node_t* curr = mg->head;
+        for (size_t j = 0; j < mg->num_nodes; ++j) {
+            curr = curr->next;
+        }
+
+        // Optionally busy-wait until interval ends
+        while (rdtscp64() < t_target);
+    }
 }
 
 int write_timings_to_csv(memorygrammer_t* mg, const char* path) {
@@ -159,10 +201,14 @@ int write_timings_to_csv(memorygrammer_t* mg, const char* path) {
         return 0;
     }
 
-
-
     for (size_t i = 0; i < mg->num_samples; ++i) {
-        fprintf(f, "%.0f\n", mg->timings[i]);
+        if (i == 0) {
+            // First sample of the new probe: write timing + num_samples
+            fprintf(f, "%.0f, %zu\n", mg->timings[i], mg->num_samples);
+        } else {
+            // Other samples of this probe: timing only
+            fprintf(f, "%.0f,\n", mg->timings[i]);
+        }
     }
 
     fclose(f);
