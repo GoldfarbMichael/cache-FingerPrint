@@ -1,0 +1,11 @@
+========================================
+           PROBING REPORT
+========================================
+Site: bbc.csv
+  Average cycles per sample: 38213293.50
+  Average num of samples per probe: 340.70
+----------------------------------------
+Site: wikipedia.csv
+  Average cycles per sample: 32916306.60
+  Average num of samples per probe: 395.51
+----------------------------------------
